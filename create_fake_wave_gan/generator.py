@@ -1,10 +1,21 @@
 import torch
 from torch import nn, optim
 import numpy as np
+import time 
 
-class ResnetGenerator(nn.Module):
-    def __init__(self,input_nc=1,output_nc=1,ngf=64,n_blocks=4):
-        super(ResnetGenerator,self).__init__()
+class Generator(nn.Module):
+
+    def __init__(self,classes,input_acc_size,input_nc=1,output_nc=1,ngf=64,n_blocks=4):
+        super(Generator,self).__init__()
+
+        self.classes = classes
+        self.input_acc_size = input_acc_size
+        
+        # label emmbedding
+        model = [nn.Embedding(classes,input_acc_size)]
+        self.embed_model = nn.Sequential(*model)
+
+        # concatenated 
         model = [nn.ReflectionPad1d(1),
                  nn.Conv1d(input_nc,ngf,kernel_size=8,padding=0,bias=True),
                  nn.InstanceNorm1d(ngf),
@@ -33,26 +44,11 @@ class ResnetGenerator(nn.Module):
         
         self.model = nn.Sequential(*model)
 
-    def forward(self,input_acc,input_gyro,labels):
-        return self.model(input)
-
-
-class Generator(nn.Module):
-
-    def __init__(self,classes,input_acc_size,gyro_channel):
-        super(Generator,self).__init__()
-        
-        # label emmbedding
-        model = [nn.Embedding(classes,input_acc_size)]
-        self.embed_model = nn.Sequential(*model)
-
-        # acc 
-        model = []
-
-
-
-    def forward(self,input_acc,input_gyro,labels):
-        return self.embed_model(labels)
+    def forward(self,z,labels):
+        bache_size = len(z)
+        embeded_labels = self.embed_model(labels).view(bache_size,1,self.input_acc_size)
+        mul_tensor = torch.mul(z,embeded_labels)
+        return self.model(mul_tensor)
 
 
 class ResnetBlock(nn.Module):
@@ -82,13 +78,16 @@ class ResnetBlock(nn.Module):
 if __name__ == "__main__":
     gyro_channel = 3
     classes = 10
-    batches = 10
-    gen = Generator(classes=classes,input_acc_size=180,gyro_channel=gyro_channel)
-    # input_acc_wave = torch.Tensor(np.random.rand(batches,1,180))
-    # input_gyro_wave = torch.Tensor(np.random.rand(batches,gyro_channel,180))
-    z = torch.normal(mean=0.5,std=0.2,size =(batches,))
-    labels = np.random.randint(0,classes-1,batches)
-    one_hot_labels = torch.from_numpy(np.identity(classes,dtype=np.int64)[labels])
+    batches = 175
+    input_size = 180
+    gen = Generator(classes=classes,input_acc_size=input_size)
 
-    output_wave = gen(input_acc_wave,input_gyro_wave,one_hot_labels)
-    print(output_wave.shape)
+    s_time = time.time()
+    for i in range(1500//batches+1):
+        z = torch.FloatTensor(np.random.normal(0, 1, (batches, 1,input_size)))
+        # print(z.shape)
+        labels = torch.from_numpy(np.random.randint(0,classes-1,batches))
+
+        output_wave = gen(z,labels)
+        print(output_wave.shape)
+    print(int((time.time()-s_time)*1000))
