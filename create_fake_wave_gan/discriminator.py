@@ -4,9 +4,14 @@ import numpy as np
 
 class Discriminator(nn.Module):
 
-    def __init__(self):
+    def __init__(self,classes,input_acc_size):
         super(Discriminator,self).__init__()
 
+        # label emmbedding
+        model = [nn.Embedding(classes,input_acc_size)]
+        self.embed_model = nn.Sequential(*model)
+
+        # discrimination
         sequence = []
         sequence += [nn.Conv1d(1,8,kernel_size = 4,stride=2,padding=1),
         nn.LeakyReLU(0.2,True)]
@@ -20,14 +25,23 @@ class Discriminator(nn.Module):
         nn.BatchNorm1d(32),
         nn.LeakyReLU(0.2,True)]
         sequence += [nn.Conv1d(32,1,kernel_size = 4,stride=2,padding=1)]
-
+        sequence += [nn.Softmax(dim=2)]
+        
         self.model = nn.Sequential(*sequence)
 
-    def forward(self,input):
+    def forward(self,input,labels):
+        embeded_label = self.embed_model(labels)
+        concatenated = torch.mul(input,embeded_label)
         return self.model(input)
 
 if __name__ == "__main__":
-    model = Discriminator()
-    input_data = torch.Tensor(np.random.rand(4,1,64))
-    output = model(input_data)
+    classes = 10
+    batches = 175
+    input_size = 180
+    model = Discriminator(input_size)
+    z = torch.FloatTensor(np.random.normal(0, 1, (batches, 1,input_size)))
+    labels = torch.from_numpy(np.random.randint(0,classes-1,batches))
+
+    output = model(z,labels)
     print(output.shape)
+    print(output)
